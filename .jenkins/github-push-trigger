@@ -1,0 +1,24 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo "Building project..."
+                sh 'mvn clean package'
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "SCM demo pipeline completed"
+        }
+    }
+}

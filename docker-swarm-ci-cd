@@ -1,0 +1,48 @@
+#!/bin/bash
+# Docker Swarm CI/CD Deployment
+set -e
+
+STACK_NAME="my-testing-app"
+SERVICE_NAME="${STACK_NAME}_web"
+
+echo "Deploying to Docker Swarm..."
+
+# Create docker-compose file for Swarm
+cat > docker-compose.swarm.yml << 'EOF'
+version: '3.8'
+
+services:
+  web:
+    image: my-testing-app:latest
+    ports:
+      - "8080:8080"
+    deploy:
+      replicas: 3
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+EOF
+
+# Deploy to swarm
+docker stack deploy -c docker-compose.swarm.yml "${STACK_NAME}"
+
+# Wait for services to be running
+echo "Waiting for services to start..."
+sleep 10
+
+# Check service status
+docker service ls | grep "${SERVICE_NAME}"
+docker service ps "${SERVICE_NAME}"
+
+echo "Docker Swarm deployment complete!"

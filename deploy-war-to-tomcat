@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+
+# Deploy WAR to Tomcat with validation
+VERSION=${1:-"1.0.0"}
+TOMCAT_URL=${TOMCAT_URL:-"http://localhost:8080"}
+WAR_FILE="${PWD}/target/my-testing-app-${VERSION}.war"
+
+echo "Deploying WAR version: $VERSION"
+echo "WAR file: $WAR_FILE"
+echo "Target Tomcat: $TOMCAT_URL"
+
+# Build version check
+if [ ! -f "$WAR_FILE" ]; then
+    echo "Building WAR file..."
+    mvn clean package -DskipTests
+fi
+
+# Use Tomcat Manager to deploy
+if [ -n "$TOMCAT_USERNAME" ] && [ -n "$TOMCAT_PASSWORD" ]; then
+    echo "Deploying via Tomcat Manager..."
+    curl -v -u "${TOMCAT_USERNAME}:${TOMCAT_PASSWORD}" \
+         -F "file=@${WAR_FILE}" \
+         "${TOMCAT_URL}/manager/text/deploy?path=/my-app&update=true"
+else
+    echo "No Tomcat credentials. Using direct file copy..."
+    cp "$WAR_FILE" "${TOMCAT_HOME}/webapps/my-app.war"
+fi
+
+echo "Deployment complete!"

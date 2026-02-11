@@ -1,0 +1,47 @@
+pipeline {
+    agent any
+
+    environment {
+        // Global variables
+        APP_NAME = 'my-testing-app'
+        APP_VERSION = '1.0.0'
+        BUILD_YEAR = '2024'
+        REGISTRY = 'docker.io'
+        DOCKER_REPO = "bhandhuvistu/${APP_NAME}"
+        JAVA_HOME = '/usr/lib/jvm/java-17-openjdk'
+        MAVEN_HOME = '/usr/share/maven'
+        LOG_LEVEL = 'INFO'
+    }
+
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    echo "==================================="
+                    echo "Application: ${APP_NAME}"
+                    echo "Version: ${APP_VERSION}"
+                    echo "Build Year: ${BUILD_YEAR}"
+                    echo "Docker Repo: ${REGISTRY}/${DOCKER_REPO}"
+                    echo "Java Home: ${JAVA_HOME}"
+                    echo "Maven Home: ${MAVEN_HOME}"
+                    echo "==================================="
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh '''
+                    ${MAVEN_HOME}/bin/mvn -v
+                    ${MAVEN_HOME}/bin/mvn clean package -DskipTests
+                '''
+            }
+        }
+
+        stage('Archive') {
+            steps {
+                archiveArtifacts artifacts: 'target/*.war', fingerprint: true
+            }
+        }
+    }
+}

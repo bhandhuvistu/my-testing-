@@ -1,0 +1,27 @@
+#!/bin/bash
+# Docker CI/CD Pipeline Script
+set -e
+
+REGISTRY=${REGISTRY:-"docker.io"}
+IMAGE_NAME=${IMAGE_NAME:-"my-testing-app"}
+BUILD_TAG=${BUILD_TAG:-"$(git rev-parse --short HEAD)"}
+
+echo "Building Docker image: ${REGISTRY}/${IMAGE_NAME}:${BUILD_TAG}"
+
+# Build image
+docker build -t "${REGISTRY}/${IMAGE_NAME}:${BUILD_TAG}" .
+docker tag "${REGISTRY}/${IMAGE_NAME}:${BUILD_TAG}" "${REGISTRY}/${IMAGE_NAME}:latest"
+
+# Push to registry
+if [ -n "$DOCKER_PASSWORD" ]; then
+    echo "Logging in to Docker registry..."
+    echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin "$REGISTRY"
+    
+    echo "Pushing image to registry..."
+    docker push "${REGISTRY}/${IMAGE_NAME}:${BUILD_TAG}"
+    docker push "${REGISTRY}/${IMAGE_NAME}:latest"
+    
+    docker logout "$REGISTRY"
+fi
+
+echo "Docker build and push complete!"

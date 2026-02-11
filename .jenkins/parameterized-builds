@@ -1,0 +1,47 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'MAVEN_VERSION', defaultValue: '3.8.1', description: 'Maven version to use')
+        string(name: 'JAVA_VERSION', defaultValue: '11', description: 'Java version')
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Target environment')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Run unit tests')
+    }
+
+    stages {
+        stage('Display Parameters') {
+            steps {
+                script {
+                    echo "Maven Version: ${params.MAVEN_VERSION}"
+                    echo "Java Version: ${params.JAVA_VERSION}"
+                    echo "Environment: ${params.ENVIRONMENT}"
+                    echo "Run Tests: ${params.RUN_TESTS}"
+                }
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('Test') {
+            when {
+                expression { params.RUN_TESTS == true }
+            }
+            steps {
+                sh 'mvn test'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                script {
+                    echo "Deploying to ${params.ENVIRONMENT} environment..."
+                    sh "bash deploy-${params.ENVIRONMENT}.sh"
+                }
+            }
+        }
+    }
+}

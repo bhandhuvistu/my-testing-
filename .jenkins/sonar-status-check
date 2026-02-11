@@ -1,0 +1,57 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Build') {
+            steps {
+                echo "Building application..."
+                sh 'mvn clean package'
+            }
+        }
+
+        stage('SonarQube Status Check') {
+            steps {
+                script {
+                    try {
+                        echo "Checking SonarQube quality gate..."
+                        sh '''
+                            QUALITY_GATE_STATUS=$(curl -s -u ${SONAR_TOKEN}: \
+                                "http://sonarqube:9000/api/qualitygates/project_status?projectKey=my-testing-app" \
+                                | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+                            
+                            echo "Quality Gate Status: $QUALITY_GATE_STATUS"
+                            
+                            if [ "$QUALITY_GATE_STATUS" = "ERROR" ]; then
+                                echo "Quality Gate FAILED - Build will fail"
+                                exit 1
+                            else
+                                echo "Quality Gate PASSED"
+                            fi
+                        '''
+                    } catch (Exception e) {
+                        echo "Could not reach SonarQube: ${e.message}"
+                        echo "Continuing with build..."
+                    }
+                }
+            }
+        }
+
+        stage('Deploy') {
+            when {
+                expression { currentBuild.result == 'SUCCESS' }
+            }
+            steps {
+                echo "Deploying to production..."
+            }
+        }
+    }
+
+    post {
+        unstable {
+            echo "Build is unstable - Quality gate warning"
+        }
+        failure {
+            echo "Build failed - Quality gate error"
+        }
+    }
+}

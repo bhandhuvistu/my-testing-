@@ -1,0 +1,23 @@
+pipeline {
+    agent any
+
+    triggers {
+        githubPush()
+    }
+
+    stages {
+        stage('Trigger Info') {
+            steps {
+                echo "Pipeline triggered by GitHub push"
+                echo "Build: ${BUILD_NUMBER}"
+                echo "Branch: ${GIT_BRANCH}"
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package'
+            }
+        }
+    }
+}

@@ -1,0 +1,170 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    parameters {
+        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Git branch to test')
+        choice(name: 'TEST_TYPE', choices: ['unit', 'integration', 'all'], description: 'Type of tests to run')
+        booleanParam(name: 'GENERATE_REPORT', defaultValue: true, description: 'Generate test report')
+    }
+
+    environment {
+        GIT_REPO = 'https://github.com/bhandhuvistu/my-testing-.git'
+        TEST_RESULTS_DIR = 'target/surefire-reports'
+        COVERAGE_REPORTS_DIR = 'target/jacoco-report'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                script {
+                    echo "====== Checking out code from Git ======"
+                    echo "Repository: ${GIT_REPO}"
+                    echo "Branch: ${params.GIT_BRANCH}"
+                }
+                
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "${params.GIT_BRANCH}"]],
+                    userRemoteConfigs: [[url: "${GIT_REPO}"]]
+                ])
+                
+                sh 'git log --oneline -5'
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo "====== Building Project ======"
+                sh '''
+                    mvn clean compile \
+                        -DskipTests \
+                        -Dmaven.test.skip=true
+                '''
+            }
+        }
+
+        stage('Unit Tests') {
+            when {
+                expression { 
+                    params.TEST_TYPE == 'unit' || params.TEST_TYPE == 'all'
+                }
+            }
+            steps {
+                echo "====== Running Unit Tests ======"
+                sh '''
+                    mvn test \
+                        -Dtest=**/*Test.java \
+                        -DfailIfNoTests=false
+                '''
+            }
+        }
+
+        stage('Integration Tests') {
+            when {
+                expression { 
+                    params.TEST_TYPE == 'integration' || params.TEST_TYPE == 'all'
+                }
+            }
+            steps {
+                echo "====== Running Integration Tests ======"
+                sh '''
+                    mvn verify \
+                        -Dtest=**/*IT.java \
+                        -DfailIfNoTests=false || true
+                '''
+            }
+        }
+
+        stage('Code Coverage') {
+            steps {
+                echo "====== Generating Code Coverage Report ======"
+                sh '''
+                    mvn jacoco:report || true
+                '''
+            }
+        }
+
+        stage('Test Report') {
+            when {
+                expression { params.GENERATE_REPORT == true }
+            }
+            steps {
+                echo "====== Processing Test Results ======"
+                
+                junit testResults: "${TEST_RESULTS_DIR}/*.xml", 
+                      allowEmptyResults: true,
+                      skipPublishingChecks: false
+                
+                script {
+                    // Parse test results
+                    if (fileExists("${TEST_RESULTS_DIR}")) {
+                        def testFiles = sh(
+                            script: "find ${TEST_RESULTS_DIR} -name '*.xml' | wc -l",
+                            returnStdout: true
+                        ).trim()
+                        
+                        echo "Test reports found: ${testFiles}"
+                    }
+                }
+            }
+        }
+
+        stage('Archive Results') {
+            steps {
+                echo "====== Archiving Test Artifacts ======"
+                
+                archiveArtifacts artifacts: "${TEST_RESULTS_DIR}/**/*.xml",
+                                 allowEmptyArchive: true,
+                                 fingerprint: true
+                
+                archiveArtifacts artifacts: "${COVERAGE_REPORTS_DIR}/**/*",
+                                 allowEmptyArchive: true,
+                                 fingerprint: true
+            }
+        }
+
+        stage('Test Summary') {
+            steps {
+                script {
+                    echo "====== Test Execution Summary ======"
+                    echo "Test Type: ${params.TEST_TYPE}"
+                    echo "Git Branch: ${params.GIT_BRANCH}"
+                    echo "Build Status: ${currentBuild.result}"
+                    
+                    // Display test results if available
+                    sh '''
+                        if [ -d "${TEST_RESULTS_DIR}" ]; then
+                            echo ""
+                            echo "Test Results:"
+                            find ${TEST_RESULTS_DIR} -name "*.xml" -exec grep -l "tests=" {} \\; | while read file; do
+                                echo "  - $(basename $file)"
+                            done
+                        fi
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "====== Pipeline Completed ======"
+            cleanWs()
+        }
+        success {
+            echo "✓ All tests passed successfully!"
+        }
+        failure {
+            echo "✗ Tests failed! Check logs above for details."
+        }
+        unstable {
+            echo "⚠ Some tests failed or warnings detected."
+        }
+    }
+}

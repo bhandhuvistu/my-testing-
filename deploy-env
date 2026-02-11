@@ -1,0 +1,46 @@
+#!/bin/bash
+# Deploy to different environments
+set -e
+
+ENVIRONMENT=${1:-"dev"}
+VERSION=${2:-"1.0.0"}
+
+case "$ENVIRONMENT" in
+    dev)
+        echo "Deploying to Development environment..."
+        HELM_VALUES="--values helm/node-app/values-dev.yaml"
+        NAMESPACE="dev"
+        ;;
+    staging)
+        echo "Deploying to Staging environment..."
+        HELM_VALUES="--values helm/node-app/values-staging.yaml"
+        NAMESPACE="staging"
+        ;;
+    prod)
+        echo "Deploying to Production environment..."
+        HELM_VALUES="--values helm/node-app/values-prod.yaml"
+        NAMESPACE="production"
+        ;;
+    *)
+        echo "Unknown environment: $ENVIRONMENT"
+        echo "Usage: $0 {dev|staging|prod} [version]"
+        exit 1
+        ;;
+esac
+
+echo "Environment: $ENVIRONMENT"
+echo "Version: $VERSION"
+echo "Namespace: $NAMESPACE"
+
+# Create namespace if it doesn't exist
+kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+# Deploy using Helm
+helm upgrade --install my-app ./helm/node-app \
+    $HELM_VALUES \
+    --set image.tag=$VERSION \
+    --namespace $NAMESPACE \
+    --wait
+
+echo "Deployment to $ENVIRONMENT complete!"
+kubectl get deployments -n "$NAMESPACE"

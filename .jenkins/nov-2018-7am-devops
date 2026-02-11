@@ -1,0 +1,14 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('November 2018 Demo') {
+            steps {
+                echo "DevOps Pipeline - November 2018"
+                echo "Building and deploying application..."
+                sh 'mvn clean package'
+                echo "Build successful!"
+            }
+        }
+    }
+}

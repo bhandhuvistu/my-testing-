@@ -1,0 +1,26 @@
+pipeline {
+    agent any
+
+    stages {
+        stage('Setup') {
+            steps {
+                echo "Setting up function demo..."
+                sh 'echo "Function demo initialized"'
+            }
+        }
+
+        stage('Execute') {
+            steps {
+                script {
+                    def result = functionDemo("test", 42)
+                    echo "Function result: ${result}"
+                }
+            }
+        }
+    }
+}
+
+def functionDemo(String name, int value) {
+    echo "Function called with: name=${name}, value=${value}"
+    return "${name}-${value}"
+}

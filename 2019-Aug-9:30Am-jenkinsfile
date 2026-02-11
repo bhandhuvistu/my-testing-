@@ -1,0 +1,52 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'BRANCH', defaultValue: 'main', description: 'Git branch to build')
+        choice(name: 'BUILD_TYPE', choices: ['debug', 'release'], description: 'Build type')
+    }
+
+    environment {
+        BUILD_DIR = "${WORKSPACE}/build"
+        ARTIFACT_DIR = "${BUILD_DIR}/artifacts"
+    }
+
+    stages {
+        stage('Prepare') {
+            steps {
+                script {
+                    echo "Build parameters:"
+                    echo "Branch: ${params.BRANCH}"
+                    echo "Build Type: ${params.BUILD_TYPE}"
+                    sh 'mkdir -p ${ARTIFACT_DIR}'
+                }
+            }
+        }
+
+        stage('Checkout') {
+            steps {
+                checkout([
+                    $class: 'GitSCM',
+                    branches: [[name: "${params.BRANCH}"]],
+                    userRemoteConfigs: [[url: 'https://github.com/bhandhuvistu/my-testing-.git']]
+                ])
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh '''
+                    echo "Building project with type: ${BUILD_TYPE}"
+                    mvn clean package -DskipTests -P${BUILD_TYPE}
+                    cp target/*.war ${ARTIFACT_DIR}/
+                '''
+            }
+        }
+
+        stage('Archive') {
+            steps {
+                archiveArtifacts artifacts: 'build/artifacts/**/*.war', fingerprint: true
+            }
+        }
+    }
+}

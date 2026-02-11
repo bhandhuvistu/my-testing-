@@ -1,0 +1,31 @@
+# Multi-stage Dockerfile optimized for Tomcat 10.x with Java 17
+# Stage 1: Build
+FROM maven:3.9-openjdk-17 AS builder
+WORKDIR /app
+COPY pom.xml .
+RUN mvn dependency:go-offline
+COPY src/ src/
+RUN mvn clean package -DskipTests
+
+# Stage 2: Tomcat Runtime
+FROM tomcat:10.1-jre17-openjdk
+# Remove default applications
+RUN rm -rf /usr/local/tomcat/webapps/*
+
+# Copy built WAR to Tomcat webapps
+COPY --from=builder /app/target/*.war /usr/local/tomcat/webapps/my-app.war
+
+# Tomcat configuration
+ENV CATALINA_HOME=/usr/local/tomcat
+ENV PATH=$CATALINA_HOME/bin:$PATH
+ENV JAVA_OPTS="-Xmx512m -Xms256m -XX:+UseG1GC"
+
+# Expose ports
+EXPOSE 8080 8009 8005
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8080/my-app/ || exit 1
+
+# Start Tomcat
+CMD ["catalina.sh", "run"]

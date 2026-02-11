@@ -1,0 +1,55 @@
+pipeline {
+    agent any
+
+    environment {
+        SONAR_HOME = "${WORKSPACE}/sonarqube"
+        SONAR_SCANNER_VERSION = "4.6.0.2311"
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    sh '''
+                        mvn sonar:sonar \
+                            -Dsonar.projectKey=my-testing-app \
+                            -Dsonar.projectName="My Testing App" \
+                            -Dsonar.sources=src \
+                            -Dsonar.java.binaries=target/classes \
+                            -Dsonar.host.url=http://sonarqube:9000 \
+                            -Dsonar.login=${SONAR_TOKEN}
+                    '''
+                }
+            }
+        }
+
+        stage('Quality Gate Check') {
+            steps {
+                script {
+                    echo "Waiting for SonarQube analysis to complete..."
+                    sh '''
+                        curl -u ${SONAR_TOKEN}: "http://sonarqube:9000/api/qualitygates/project_status?projectKey=my-testing-app" | grep -o '"status":"[^"]*"'
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "SonarQube analysis complete"
+        }
+    }
+}

@@ -1,0 +1,51 @@
+#!/bin/bash
+set -e
+
+# Deployment to Tomcat Script
+TOMCAT_HOME=${TOMCAT_HOME:-/opt/tomcat}
+WAR_FILE=${1:-"target/app.war"}
+APP_NAME="my-testing-app"
+
+echo "Starting deployment to Tomcat..."
+
+# Check if WAR file exists
+if [ ! -f "$WAR_FILE" ]; then
+    echo "Error: WAR file not found: $WAR_FILE"
+    exit 1
+fi
+
+# Stop Tomcat
+echo "Stopping Tomcat..."
+${TOMCAT_HOME}/bin/catalina.sh stop
+
+# Wait for Tomcat to stop
+sleep 5
+
+# Backup existing deployment
+if [ -d "${TOMCAT_HOME}/webapps/${APP_NAME}" ]; then
+    echo "Backing up existing deployment..."
+    cp -r "${TOMCAT_HOME}/webapps/${APP_NAME}" "${TOMCAT_HOME}/webapps/${APP_NAME}.backup.$(date +%Y%m%d%H%M%S)"
+fi
+
+# Deploy new WAR
+echo "Deploying new WAR file..."
+cp "$WAR_FILE" "${TOMCAT_HOME}/webapps/${APP_NAME}.war"
+
+# Start Tomcat
+echo "Starting Tomcat..."
+${TOMCAT_HOME}/bin/catalina.sh start
+
+# Wait for Tomcat to start
+sleep 10
+
+# Check deployment status
+if curl -f "http://localhost:8080/${APP_NAME}/" > /dev/null 2>&1; then
+    echo "Deployment successful!"
+    exit 0
+else
+    echo "Deployment failed! Rolling back..."
+    ${TOMCAT_HOME}/bin/catalina.sh stop
+    cp -r "${TOMCAT_HOME}/webapps/${APP_NAME}.backup"* "${TOMCAT_HOME}/webapps/${APP_NAME}"
+    ${TOMCAT_HOME}/bin/catalina.sh start
+    exit 1
+fi
