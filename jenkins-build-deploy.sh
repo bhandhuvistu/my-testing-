@@ -64,30 +64,66 @@ echo "=========================================="
 echo "Step 3: Deploying to Tomcat"
 echo "=========================================="
 
-# Check Tomcat is running
-if ! curl -s http://localhost:8080/ > /dev/null; then
-    echo "Tomcat is not running, starting..."
-    "${TOMCAT_HOME}/bin/startup.sh"
-    sleep 3
+# Verify Tomcat directory exists
+if [ ! -d "${TOMCAT_HOME}" ]; then
+    echo "ERROR: Tomcat directory not found at ${TOMCAT_HOME}"
+    echo "Searching for Tomcat installation..."
+    find / -name "catalina.sh" 2>/dev/null | head -5
+    exit 1
 fi
 
-# Stop Tomcat
-echo "Stopping Tomcat..."
-"${TOMCAT_HOME}/bin/shutdown.sh" 2>/dev/null || true
-sleep 2
+if [ ! -d "${TOMCAT_WEBAPPS}" ]; then
+    echo "ERROR: Tomcat webapps directory not found at ${TOMCAT_WEBAPPS}"
+    ls -la "${TOMCAT_HOME}/"
+    exit 1
+fi
+
+# Check if Tomcat is currently running
+echo "Checking Tomcat status..."
+if ps aux | grep -v grep | grep "catalina"; then
+    echo "Tomcat is running, stopping..."
+    "${TOMCAT_HOME}/bin/shutdown.sh" 2>/dev/null || true
+    sleep 3
+    
+    # Verify shutdown
+    if ps aux | grep -v grep | grep "catalina"; then
+        echo "Tomcat still running, forcing kill..."
+        pkill -9 java
+        sleep 2
+    fi
+else
+    echo "Tomcat is not running"
+fi
 
 # Remove old application
 echo "Removing old deployment..."
-rm -rf "${TOMCAT_WEBAPPS}/${APP_CONTEXT}"
-rm -f "${TOMCAT_WEBAPPS}/${APP_CONTEXT}.war"
+rm -rf "${TOMCAT_WEBAPPS}/${APP_CONTEXT}" 2>/dev/null || true
+rm -f "${TOMCAT_WEBAPPS}/${APP_CONTEXT}.war" 2>/dev/null || true
+echo "✓ Old deployment cleaned"
 
 # Deploy new WAR
 echo "Deploying new application..."
+if [ ! -f "${WAR_FILE}" ]; then
+    echo "ERROR: WAR file not found at ${WAR_FILE}"
+    exit 1
+fi
+
 cp "${WAR_FILE}" "${TOMCAT_WEBAPPS}/${APP_CONTEXT}.war"
-echo "✓ WAR copied to Tomcat"
+if [ -f "${TOMCAT_WEBAPPS}/${APP_CONTEXT}.war" ]; then
+    echo "✓ WAR copied to Tomcat ($(du -h "${TOMCAT_WEBAPPS}/${APP_CONTEXT}.war" | cut -f1))"
+else
+    echo "ERROR: Failed to copy WAR file"
+    ls -la "${TOMCAT_WEBAPPS}/"
+    exit 1
+fi
 
 # Start Tomcat
 echo "Starting Tomcat..."
+if [ ! -f "${TOMCAT_HOME}/bin/startup.sh" ]; then
+    echo "ERROR: Tomcat startup.sh not found"
+    exit 1
+fi
+
 "${TOMCAT_HOME}/bin/startup.sh"
 
 # Wait for Tomcat to start
